@@ -1137,6 +1137,39 @@ impl WalletClient {
             .await
     }
 
+pub async fn get_transfer_from_str(
+        &self,
+        txid: &str,
+        account_index: Option<u32>,
+    ) -> anyhow::Result<Option<GotTransfer>> {
+        #[derive(Deserialize)]
+        struct Rsp {
+            transfer: GotTransfer,
+        }
+
+        let params = empty()
+            .chain(Some(("txid", txid.into())))
+            .chain(account_index.map(|v| ("account_index", v.into())));
+
+        let rsp = match self
+            .inner
+            .0
+            .json_rpc_call("get_transfer_by_txid", RpcParams::map(params))
+            .await?
+        {
+            Ok(v) => serde_json::from_value::<Rsp>(v)?,
+            Err(e) => {
+                if e.code == jsonrpc_core::ErrorCode::ServerError(-8) {
+                    return Ok(None);
+                } else {
+                    return Err(e.into());
+                }
+            }
+        };
+
+        Ok(Some(rsp.transfer))
+    }
+    
     /// Show information about a transfer to/from this address. **Calls `get_transfer_by_txid` in
     /// RPC.**
     pub async fn get_transfer(
